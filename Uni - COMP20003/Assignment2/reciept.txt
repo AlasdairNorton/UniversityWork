@@ -1,0 +1,645 @@
+============================================
+vis/LOG
+19:26:56_Wednesday_16_October_2013
+============================================
+
+********************************************************
+Located submitted makefile
+
+********************************************************
+
+********************************************************
+ Testing make helpme
+********************************************************
+
+gcc -c -Wall graph.c
+gcc -c -Wall heap.c
+cc    -c -o emergencyresponse.o emergencyresponse.c
+gcc -o helpme graph.o heap.o emergencyresponse.o
+
+Successfully made helpme
+
+*******************************************************
+helpme : Test 1 using WestAfricanDatabase
+*******************************************************
+Enter the location of the disaster:
+Enter the required supplies:
+W    4     Bamako   46 hrs
+                    4 Bamako
+                    1 Mopti
+                    3 Gao
+============================================
+src/Makefile
+19:26:55_Wednesday_16_October_2013
+============================================
+# Makefile for COMP20003 Assignment 2
+
+helpme: graph.o heap.o emergencyresponse.o
+	gcc -o helpme graph.o heap.o emergencyresponse.o
+
+graph.o: graph.c graph.h heap.h
+	gcc -c -Wall graph.c
+
+heap.o: heap.c heap.h
+	gcc -c -Wall heap.c
+
+emergencyResponse.o: emergencyresponse.c heap.h graph.h
+	gcc -c -Wall emergencyresponse.c
+============================================
+src/design.txt
+19:26:55_Wednesday_16_October_2013
+============================================
+------
+Files:
+------
+emergencyresponse.c:
+Main control for progam.
+                   -main()
+                   -readfile() - reads the input database, constructs a list of cities
+                   -printcity() - Prints the data of the given city to stdout, for debug purposes
+
+
+heap.c:
+Implementation of heap/priority queue
+                   -makePQ()
+                   -enQ()
+                   -deQ()
+                   -changeWeight()
+                   -upheap()
+                   -downheap()
+
+graph.c:
+Contains graph management functions
+                   -dijkstra() - Dijkstra's algorithm
+                   -find_supply() - given a resource code and the output of Dijkstra's algorithm,
+                                      finds the closest city with that resource
+                   -printPath() - Prints the shortest path to a resource as obtained from find_supply();
+                                      
+heap.h
+Contains heap.c function prototypes, defines city_t and edge_t types
+
+graph.h
+Contains graph.c function prototypes
+
+As emergencyresponse.c is the controlling program, it is not used in either of the other programs, so no header
+file is required.
+
+----------------------
+Overall functionality:
+----------------------
+To find the shortest path from the resources required, first we find the shortest path from all other cities.
+To do this, run Dijkstra's single source shortest path algorithm over the entire graph. However since rather than single source, single destination shortest paths are required, the same algorithm is used, but the direction of all edges is reversed. This is managed during data reading.
+
+Using a priority queue for Dijkstra's algorithm, it runs in O((V+E)logV)
+
+Once the shortest path data is recieved, find the closest resource for each resource but simply iterating over the dist[] array from Dijkstra's algorithm. 
+This is in O(V); longer than necessary for a search, but since there will be at most 5 searches (there are only 5 supply types), the cost of sorting the data is never made up for by the more efficient search time (5V < VlogV + 5logV for all V>11; VlogV is the complexity of most sorting algorithms, logV is the cost of searching a sorted array).
+
+Once the correct city is found, getting the path back to the soucre is easily done by iterating back over pred[].
+
+----------------
+Data structures:
+----------------
+Two explicit structures are defined - city_t and edge_t
+city_t contains all straightforward fields (int cityID, char* cityName, char* reliefAvailable), as well as a list of edges connecting to it, implemented as a linked list.
+
+edge_t contains just contains two ints, cityID, the destination of the edge (or the origin, since edges are recorded backwards) and travelTime, the edges' weight, as well as a pointer to edge_t, used to create the linked lists in city_t, but ignored in the heap functions.
+
+Abstractly, an array based heap/priority queue is used in Dijkstra's algorithm.
+
+
+-------------
+Program flow:
+-------------
+Recieves database text file as a command line argument. Reads the data into an array, indexed by cityID. Edges are read backwards (i.e. if in the entry for city A, there is an edge (B,10), record it in city B as (A, 10)), so that Dijkstra's algorithm finds single destination shortest paths rather than single source.
+
+Creates pred[] and dist[] arrays, to be used in dijkstra().
+
+Takes user input: disaster location and supplies needed.
+
+Finds the disaster location's cityID.
+
+Runs Dijkstra's algorithm.
+
+For each resource required, runs findSupply() then printPath(), finding the shortest path to the resource and printing the path back to the source.
+If no resource was searched for, runs findSupply for all supply types, prints the shortest path to any resource.
+
+----------------------
+Possible Improvements:
+----------------------
+Saving petrol: To increase efficiency, the closest instance of a resource should not be used if there is an instance further away but on the path from another resource. To achieve this, rather than immediately printing out the resource path data, find_resource() should populate an array of (resource, city, distance) tuples. Then, another function iterates iterates over this list, looking at each path in turn, starting with the longest. If any of the cities on this path contain the other required resources, choose that city, instead of the closer one. Continue iterating until no more changes are made.
+Pseudocode:
+for each path, starting with the longest{
+    while(changes made){
+        changes made = false
+        for(city on longest path){
+            if city contains needed resource{
+                changes made = true
+                resourceAt = city
+                resourceDist = cityDist
+            }
+        }
+    }
+}
+
+   ============================================
+src/emergencyresponse.c
+19:26:55_Wednesday_16_October_2013
+============================================
+/* Alasdair Norton - 587162
+ * COMP20003 Alg&DS Assignment 2, Semester 2 2013 
+ * Contains the driver program */
+ 
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include "heap.h"
+#include "graph.h"
+
+#define LINE_LEN 256
+#define NUM_EDGES 30
+#define MAX_SUPPLIES 5
+#define NAME_LEN 30
+
+city_t** readfile(FILE* input, int *num_cities);
+void printcity(city_t*);
+
+
+int main(int argc, char** argv){
+	FILE* input;
+	int num_cities=0, i, num_supplies=0, searchID=-1;
+	int next_id, min_id, *pred, *dist;
+	city_t **citylist;
+	city_t *temp;
+	char searchName[NAME_LEN], searchSupplies[MAX_SUPPLIES], one_supply; 
+	char allSupplies[] = {'B', 'F', 'W', 'D', 'M'};
+    
+	/* Open and read database, initialise graph arrays */
+	if(argc!=2){
+		printf("Error: No database provided\n");
+		exit(EXIT_FAILURE);
+	}
+	if((input = fopen(argv[1], "r"))==NULL){
+		printf("Read Error: File Not Found\n");
+		exit(EXIT_FAILURE);
+	}
+
+	/* Read input file */
+	citylist = readfile(input, &num_cities);
+    
+	/* Create dist[] and pred[] */
+	if((dist = (int*)malloc(sizeof(int)*(num_cities)))==NULL){
+		printf("Memory error in creating dist array\n");
+		exit(EXIT_FAILURE);
+	}
+	if((pred = (int*)malloc(sizeof(int)*(num_cities)))==NULL){
+		printf("Memory error in creating dist array\n");
+		exit(EXIT_FAILURE);
+	}
+    
+	/* Get input */
+    
+	printf("Enter the location of the disaster:\n");
+	scanf("%s", searchName);
+	scanf("%c", &one_supply); /* Collect newline character from previous scan */
+    
+	printf("Enter the required supplies:\n");
+	while(scanf("%c", &one_supply)==1 && num_supplies<MAX_SUPPLIES){
+		if(one_supply != '\n'){
+			searchSupplies[num_supplies] = one_supply;
+			num_supplies++;
+		}else{
+			break;
+		}
+	}
+     
+	/* Find source city */
+	for(i=0;i<num_cities;i++){
+		if(strcmp(searchName, citylist[i]->cityName)==0){
+			searchID = i;
+			break;
+		}
+	}
+	if(searchID == -1){
+		/* City was not found */
+		printf("The city entered is not in the database. Exiting program.\n");
+		exit(EXIT_FAILURE);
+	}
+        /* run graph algorithm */
+        dijkstra(citylist, num_cities, searchID, dist, pred); 
+        
+        /* For each resource requested run findResource */
+        if(num_supplies > 0){
+        	for(i=0;i<num_supplies;i++){
+        		min_id = findSupply(searchSupplies[i], citylist, num_cities, dist, pred);
+        		printPath(searchSupplies[i], citylist, num_cities, dist, pred, min_id);
+        	}
+        }else{
+        	/* If no Supplies were requested, find nearest instance of any resource */
+        	min_id = num_cities+1;
+        	/* Find closest resource */
+        	for(i=0;i<MAX_SUPPLIES;i++){
+        		next_id = findSupply(allSupplies[i], citylist, num_cities, dist, pred);
+        		if(dist[next_id] < dist[min_id]){
+        			min_id = next_id;
+        			one_supply = allSupplies[i];
+                	}
+                }
+                /* Print closest resource */
+                if(min_id<num_cities){
+                	printf("You requested no supplies.");
+                	printf("The closest supplies available are:\n");
+                	printPath(one_supply, citylist, num_cities, 
+                		dist, pred, min_id);
+                }else{
+                	printf("This city can access no supplies. \n");
+                }
+        }    
+        return 0;
+}
+
+city_t** readfile(FILE* input, int *num_cities){
+	char line[LINE_LEN];
+	int tempCityID, tempTravelTime,  i;
+	city_t **citylist;
+	city_t *temp, *edge_dest;
+	edge_t *temp_edge, *insert_point;
+	char *edgestr, *field;
+  
+
+	/* Read first line, initialise citylist */
+	if(fgets(line, LINE_LEN, input)==NULL){
+		printf("Error: Empty file");
+		exit(EXIT_FAILURE);
+	}
+	*num_cities = atoi(line);
+	if(*num_cities == 0){
+		printf("Error: Database format invalid (Line 1)"); 
+		exit(EXIT_FAILURE);
+	}  
+	if((citylist = (city_t**)malloc(sizeof(city_t*)*(*num_cities)))==NULL){
+		printf("Memory Error: Initialise citylist failed");
+		exit(EXIT_FAILURE);    
+	}
+
+	/* Initialise all cities */
+	for(i=0;i<*num_cities;i++){
+		if((citylist[i] = (city_t*)malloc(sizeof(city_t)))==NULL){
+			printf("Memory Error: Populate citylist failed");
+			exit(EXIT_FAILURE);    
+		}
+		citylist[i]->cityConnections= NULL; 
+	}
+
+	while(fgets(line, LINE_LEN, input)!=NULL){
+		/* For each line */
+		/* 1. Create new city_t to store data */
+
+		/* Tokenise string on | and assign to fields in city_t */
+		field = strtok(line, "|");
+		temp = citylist[atoi(field)];
+		temp->cityID = atoi(field);
+        
+		field = strtok(NULL, "|");
+		strcpy(temp->cityName, field);
+		
+		field = strtok(NULL, "|");
+		strcpy(temp->reliefAvailable, field);
+		
+		edgestr = strtok(NULL, "|");
+      
+		/* Now manage list of CityID:Time pairs */
+		field = strtok(edgestr, ",");
+
+		while(field!=NULL){    
+			/* While there are still edges to be read */
+			if(sscanf(field, "%d:%d", &tempCityID, &tempTravelTime)
+				==2){
+				/* Make new edge */
+				if((temp_edge = (edge_t*)malloc(sizeof(edge_t)))
+					==NULL){
+					printf("Memory Error: Create edge");
+					exit(EXIT_FAILURE);    
+				}  
+				/* Fill in fields */   
+				temp_edge->cityID = temp->cityID;
+				temp_edge->travelTime = tempTravelTime;
+				temp_edge->next = NULL;
+				/* Insert into correct city's edge list */
+				edge_dest = citylist[tempCityID];
+				insert_point = edge_dest->cityConnections;
+                
+				/* Find insertion point */
+				if(insert_point == NULL){
+					edge_dest->cityConnections = temp_edge;
+				}else{
+					while(insert_point->next!=NULL){
+						insert_point = insert_point->next;
+					}
+					/* Insert */
+					insert_point->next = temp_edge;
+				}
+
+                                
+			}
+			/* Get next edge data */
+			field = strtok(NULL, ",");
+                
+		}
+	/* Put new city into city list */	
+        citylist[temp->cityID] = temp;   
+        }
+        return citylist;            
+}
+
+/* Prints city data out as a new line - used in debugging readfile() */
+void printcity(city_t* city){
+	int i;
+	edge_t *edge = city->cityConnections;
+	printf("CityID: %d, City Name: %s, Supplies: %s, Connections:",  
+		city->cityID, city->cityName, city->reliefAvailable);
+	while(edge!=NULL){
+		printf("(%d,%d), ", edge->cityID, edge->travelTime);
+		edge = edge->next;
+	}
+	printf("\n");
+}
+============================================
+src/graph.c
+19:26:55_Wednesday_16_October_2013
+============================================
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <limits.h>
+#include "heap.h"
+#include "graph.h"
+
+
+/* Dijkstra's Algorithm */
+
+void dijkstra (city_t** cities, int city_count, int source, int dist[], 
+		int pred[]){
+	int i, j,  queue_len = city_count;
+	edge_t* PQ;
+	edge_t u_dist, *u_to_v, v_dist;
+	city_t *v, *u;
+          
+          
+	/* Initialise */
+	for(i=0;i<city_count;i++){
+		dist[i] = INT_MAX/2; 
+		/* INT_MAX/2 is the largest int such that if it is doubled, 
+		it won't cause int overflow */
+		pred[i] = -1;
+	}
+	dist[source] = 0;
+
+	PQ = makePQ(city_count);     
+     
+	/* Populate PQ */
+	for(i=1;i<=city_count;i++){
+		PQ[i].cityID = cities[i-1]->cityID;
+		PQ[i].travelTime = dist[i-1];
+	}
+         
+	for(i=city_count/2;i>0;i--){
+		downheap(PQ, city_count, i);
+	}
+         
+	/* Run the algorithm */
+	while(queue_len > 0){
+		/* Get the closest city, u.cityID, where u is the first item 
+		   in the queue */     
+		u_dist = deQ(PQ, &queue_len);
+		u = cities[u_dist.cityID];
+		u_to_v = u->cityConnections;
+		/* For each edge in temp_city */    
+		while(u_to_v !=NULL){             
+			v = cities[u_to_v->cityID];                
+			/* Find the estimate of v's distance in the PQ */
+			for(j=1;j<=queue_len;j++){                          
+				if(PQ[j].cityID ==  v->cityID){
+					v_dist = PQ[j];
+					break;
+				}
+			}
+			/* If the length of the edge u->v plus the distance to
+			   u is less than the estimated distance to v, 
+			   update the estimate */
+			if(u_dist.travelTime + u_to_v->travelTime <  
+				                             dist[v->cityID]){
+				dist[v->cityID] = u_dist.travelTime + 
+				                            u_to_v->travelTime;
+				pred[v->cityID] = u->cityID;
+				PQ = changeWeight(PQ, queue_len, 
+					              v_dist, dist[v->cityID]);
+			}
+			/* Update u_to_v */
+			u_to_v = u_to_v->next;
+		}
+	}
+}
+
+
+/* Dijkstra's algorithm returns two arrays; one of travel times and one of
+   predecessors on the path to the source. Search the travel time list for the 
+   closest city which possesses the required supply */   
+int findSupply(char supply, city_t** cities, int num_cities, int dist[], 
+		int pred[]){
+	int i, j, min_dist = INT_MAX, min_id=-1; 
+	/* min_id defaults to -1 as a flag for failure 
+	   (i.e. supply cannot be found at all)*/
+	city_t* tempCity;
+	char* supplies;
+	/* Linear sort since num_citites is likely to be small */
+	for(i=0;i<num_cities;i++){
+		tempCity = cities[i];
+		supplies = tempCity->reliefAvailable;
+          
+		for(j=0;j<strlen(supplies);j++){
+			if(supplies[j] == supply && dist[i]<min_dist){
+				min_dist = dist[i];
+				min_id= i;
+			}
+		}          
+	}
+	/* Have cityID and minimum distance for the supply. Return cityID */
+	return min_id;    
+}
+
+void printPath(char supply, city_t** cities, int num_cities, int dist[],
+		int pred[], int min_id){
+	int min_dist;
+	city_t *tempCity;
+	if(min_id > -1){
+		min_dist = dist[min_id];
+	}else{
+		min_dist = INT_MAX; /* Indicates supply unavailable */
+	}
+	if(min_dist<INT_MAX/2){
+		tempCity = cities[min_id];
+		/* Print top line, formatted as
+		supplyCode cityID cityName distance
+		*/
+		printf("%c %4d %10s  %3d hrs\n", 
+			supply, tempCity->cityID, tempCity->cityName, min_dist);
+		while(pred[min_id]!=-1){ 
+			/* Trace back the path using the pred array.
+			   -1 is used as a flag for no predecessor */
+			printf("                %5d %s\n", 
+			     cities[min_id]->cityID, cities[min_id]->cityName);
+			min_id = pred[min_id];
+		}
+		/* Last line to print destination city */
+		printf("                %5d %s\n", 
+			cities[min_id]->cityID, cities[min_id]->cityName);
+	}else{
+		printf("%c is not available\n", supply);
+	}
+}
+============================================
+src/graph.h
+19:26:55_Wednesday_16_October_2013
+============================================
+void dijkstra(city_t** cities, int city_count, int source, int dist[], int pred[]);
+int findSupply(char supply, city_t** cities, int num_cities, int dist[], int pred[]);
+void printPath(char supply, city_t** cities, int num_cities, int dist[], int pred[], int min_id);
+============================================
+src/heap.c
+19:26:55_Wednesday_16_October_2013
+============================================
+#include <stdio.h>
+#include <stdlib.h>
+#include <limits.h>
+#include "heap.h"
+
+
+
+/* Makes and returns an empty array of edges, for use as a priority queue
+   Sets queue[0] to a edge with travelTime -1; less than all possible values*/
+edge_t* makePQ(int size){
+	edge_t* queue;
+	if((queue = (edge_t*)malloc(sizeof(edge_t)*(size+1)))==NULL){
+		/* Malloc failed */
+		printf("Memory error in creating queue\n");
+		exit(EXIT_FAILURE);
+	}
+        
+	queue[0].travelTime=-1;
+	return queue;
+}
+
+/* Inserts a new item into the heap */
+edge_t* enQ(edge_t* queue, int* queue_len, edge_t data){
+	*queue_len += 1;
+	queue[*queue_len] = data;
+	queue = upheap(queue, *queue_len);
+	return queue;
+}
+
+/* Removes and returns first item from queue. */
+edge_t deQ(edge_t* queue, int* queue_len){    
+	/* Assign value to be returned to a temp variable */
+	edge_t temp = queue[1]; 
+	/* Set the last element to the first */
+	queue[1] = queue[*queue_len];          
+	/* Reduce the queue length */
+	*queue_len -= 1;                 
+	 /* Fix the heap */
+	queue = downheap(queue, *queue_len, 1);                   
+	return temp;
+}
+
+
+edge_t* changeWeight(edge_t* queue, int queue_len, edge_t item, int new_weight){
+	int i;
+	/* update weight */
+	for(i=1;i<=queue_len;i++){
+		if(queue[i].cityID == item.cityID){
+			queue[i].travelTime = new_weight;
+			break;
+		}
+	}
+        
+        /* rebalance heap:
+           The new key is either a) Less than its parent, 
+           				and therefore needs to move up
+                                 b) Greater than its smaller child, 
+                                 	and therefore needs to move down
+                                 c) In the correct position.
+           upheap(queue,i) will solve situation a), 
+           downheap(queue, queue_len, i) solves situation b),
+           and neither function has any affect in situation c) */
+        upheap(queue, i);
+        downheap(queue, queue_len, i);
+        return queue;
+}
+
+edge_t* upheap(edge_t* queue, int k){
+	edge_t temp;
+
+	temp = queue[k];
+	while(queue[k/2].travelTime >= temp.travelTime){
+		queue[k] = queue[k/2];
+		k = k/2;
+	}
+   
+	queue[k] = temp;
+       
+	return queue;
+}
+
+edge_t* downheap(edge_t* queue, int queue_len, int k){
+	edge_t temp;
+	int j;
+	temp = queue[k];
+	while(k<=queue_len/2){
+		j=2*k;
+		if(j < queue_len && queue[j].travelTime>queue[j+1].travelTime){
+			j++;
+		}
+		if(queue[j].travelTime>temp.travelTime){
+			break;
+		}
+		queue[k] = queue[j];
+		k=j;
+	}
+	queue[k] = temp;
+	return queue;
+}
+
+============================================
+src/heap.h
+19:26:55_Wednesday_16_October_2013
+============================================
+/* Define data types*/
+typedef struct city city_t;
+typedef struct edge edge_t;
+
+struct edge{
+       int travelTime;
+       int cityID;
+       edge_t* next;
+};
+
+
+struct city{
+      int cityID;
+      char cityName[20], reliefAvailable[6];
+      edge_t* cityConnections;
+};
+
+
+
+
+/* Priority Queue functions */
+edge_t* makePQ(int size);
+edge_t* enQ(edge_t* queue, int* queue_len, edge_t data);
+edge_t deQ(edge_t* queue, int* queue_len);
+edge_t* changeWeight(edge_t* queue, int queue_len, edge_t item, int new_weight);
+/* Other functions: emptyQ, delete, replace not needed as the 
+   queue is created from a database and the data not modified during use. */
+/* Heap functions */
+edge_t* upheap(edge_t* queue, int k); /* point of insertion: bottom of queue */
+edge_t* downheap(edge_t* queue, int queue_len, int k); /* point where data was removed: almost always 1 */

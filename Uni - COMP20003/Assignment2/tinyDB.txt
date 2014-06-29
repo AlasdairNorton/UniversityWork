@@ -1,0 +1,5 @@
+4
+0|SourceForAnyOrF7|F|1:4,3:1
+1|Intermediate|X|2:3
+2|Disaster|X|
+3|Breadth-firstDist10|F|2:10

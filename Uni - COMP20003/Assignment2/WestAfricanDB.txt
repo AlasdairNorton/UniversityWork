@@ -1,0 +1,7 @@
+6
+3|Gao|X|1:36 
+0|Timbuktu|BM|1:20 
+2|Taoudenni|X|  
+4|Bamako|BMFWD|1:10 
+1|Mopti|X|0:24,3:36,4:10 
+5|Niamey|WMF|3:48 

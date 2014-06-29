@@ -1,0 +1,39 @@
+A. Commentary:
+The counts for key comparisons update once per loop iteration. That is, one loop iteration, which for insertion incorporates two tests (curr->next!=NULL, insert_key>curr->key), and for search, three tests (curr!=NULL, searched_key>=next->key, searched_key==next->key). These constants don't affect the big-O value of the functions, and including them in the count would simply complicate the analysis. 
+
+Handling of duplicate keys: Searching will always return the (FIRST/LAST) value for a duplicate key. Inserting a duplicate key will put the new node after the equal keys. 
+
+B. Inserting n items:
+Theoretically, the best case is when the input data is reverse sorted, so each new node is inserted at the head of the list. In this case, there are n comparisons. The worst case occurs when the data is sorted, so each new node is inserted at the end of the list. In this case, there will be n(n+1)/2 comparisons. The average case for randomly arranged data will be approximately half od the worst case.
+
+               Tests: 
+               Using input data generated with generate_key_value_pairs.c
+
+               Input size       Sorting          Comparisons
+               250              Random           16425          
+               250              Sorted           31375
+               250              Reverse          250
+
+               Etc. 
+               
+               Comments: For sorted and reverse sorted data, there were exactly the mathmatically predicted number               of comparisons.
+               
+C. Searching:
+
+
+
+PART B:
+Commentary:
+I initially considered creating a distinct list_t type for the head of the list.
+This would be effectively identical to the node_t type, but without the key or value fields. I discarded this because in some places, notably the search function, being able to treat the listhead as a node simplified matters, allowing me to complete a search in one loop, rather than two or three (since I did not have to seperately find the correct level of the list to begin searching at). Since the additional memory required is only 8 bytes (one int and one NULL pointer), the increase in simplicity has no huge cost; if the nodes took a large amount of memory, or a vast number of lists were needed, another approach would be needed.
+Notably, even though the listhead 'node' has a key of 0, this does not prevent the program from handling negative keys, since the listhead's key is never checked in insertion or searching. 
+
+Treatment of counters and duplicate nodes is essentially the same as for part A.
+
+The RNG is seeded using the system time, using time.h, effective guaranteeing a new seed for each time the program is run (provided it isn't run twice in one second).
+
+Experimentation:
+Theory: Given the skiplist's reliance on random number generation, it is impossible to pin down how many iterations the build and search processes should take with the same precision as with the linked list.
+BUILD: Inserting a node will take more comparisons than for the linked list, since the correct insertion point must be found at all levels of the list, rather than just the first. The process will still be on the order of n; each insertion will take 
+n*numlevels*average_nodes_per_level comparisons, where numlevels and the average are both constant. Hence inserting n items will still be on O(n^2).
+SEARCH: The skiplist will, on average perform far better than the linked list. In the worst case, no nodes are raised to a higher level, and the skiplist devolves to a linked list, and the search takes O(n). The average case, with probability of a node gaining a level p, each level will have n^-(level*p) nodes on it, hence the search will be on O(log(n)).

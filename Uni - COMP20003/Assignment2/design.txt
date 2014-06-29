@@ -1,0 +1,94 @@
+------
+Files:
+------
+emergencyresponse.c:
+Main control for progam.
+                   -main()
+                   -readfile() - reads the input database, constructs a list of cities
+                   -printcity() - Prints the data of the given city to stdout, for debug purposes
+
+
+heap.c:
+Implementation of heap/priority queue
+                   -makePQ()
+                   -enQ()
+                   -deQ()
+                   -changeWeight()
+                   -upheap()
+                   -downheap()
+
+graph.c:
+Contains graph management functions
+                   -dijkstra() - Dijkstra's algorithm
+                   -find_supply() - given a resource code and the output of Dijkstra's algorithm,
+                                      finds the closest city with that resource
+                   -printPath() - Prints the shortest path to a resource as obtained from find_supply();
+                                      
+heap.h
+Contains heap.c function prototypes, defines city_t and edge_t types
+
+graph.h
+Contains graph.c function prototypes
+
+As emergencyresponse.c is the controlling program, it is not used in either of the other programs, so no header
+file is required.
+
+----------------------
+Overall functionality:
+----------------------
+To find the shortest path from the resources required, first we find the shortest path from all other cities.
+To do this, run Dijkstra's single source shortest path algorithm over the entire graph. However since rather than single source, single destination shortest paths are required, the same algorithm is used, but the direction of all edges is reversed. This is managed during data reading.
+
+Using a priority queue for Dijkstra's algorithm, it runs in O((V+E)logV)
+
+Once the shortest path data is recieved, find the closest resource for each resource but simply iterating over the dist[] array from Dijkstra's algorithm. 
+This is in O(V); longer than necessary for a search, but since there will be at most 5 searches (there are only 5 supply types), the cost of sorting the data is never made up for by the more efficient search time (5V < VlogV + 5logV for all V>11; VlogV is the complexity of most sorting algorithms, logV is the cost of searching a sorted array).
+
+Once the correct city is found, getting the path back to the soucre is easily done by iterating back over pred[].
+
+----------------
+Data structures:
+----------------
+Two explicit structures are defined - city_t and edge_t
+city_t contains all straightforward fields (int cityID, char* cityName, char* reliefAvailable), as well as a list of edges connecting to it, implemented as a linked list.
+
+edge_t contains just contains two ints, cityID, the destination of the edge (or the origin, since edges are recorded backwards) and travelTime, the edges' weight, as well as a pointer to edge_t, used to create the linked lists in city_t, but ignored in the heap functions.
+
+Abstractly, an array based heap/priority queue is used in Dijkstra's algorithm.
+
+
+-------------
+Program flow:
+-------------
+Recieves database text file as a command line argument. Reads the data into an array, indexed by cityID. Edges are read backwards (i.e. if in the entry for city A, there is an edge (B,10), record it in city B as (A, 10)), so that Dijkstra's algorithm finds single destination shortest paths rather than single source.
+
+Creates pred[] and dist[] arrays, to be used in dijkstra().
+
+Takes user input: disaster location and supplies needed.
+
+Finds the disaster location's cityID.
+
+Runs Dijkstra's algorithm.
+
+For each resource required, runs findSupply() then printPath(), finding the shortest path to the resource and printing the path back to the source.
+If no resource was searched for, runs findSupply for all supply types, prints the shortest path to any resource.
+
+----------------------
+Possible Improvements:
+----------------------
+Saving petrol: To increase efficiency, the closest instance of a resource should not be used if there is an instance further away but on the path from another resource. To achieve this, rather than immediately printing out the resource path data, find_resource() should populate an array of (resource, city, distance) tuples. Then, another function iterates iterates over this list, looking at each path in turn, starting with the longest. If any of the cities on this path contain the other required resources, choose that city, instead of the closer one. Continue iterating until no more changes are made.
+Pseudocode:
+for each path, starting with the longest{
+    while(changes made){
+        changes made = false
+        for(city on longest path){
+            if city contains needed resource{
+                changes made = true
+                resourceAt = city
+                resourceDist = cityDist
+            }
+        }
+    }
+}
+
+   
