@@ -1,0 +1,5 @@
+1. Make list of boundary points. ---
+2. Convert into list of boundary lines (by passing consecutive pairs to a line type, presumably containing start and end points) ---
+3. Calculate centroid of polygon.
+4. For each point, check if centroid lies within boundary, using line compare function provided.
+5. Print # if outside, appropriate character otherwise.
