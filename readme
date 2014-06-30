@@ -1,0 +1,24 @@
+A collection of university assignments from 2013
+
+COMP20005 - Engineering Computation
+-----------------------------------
+Assignment 1: Write (in C) a program which, given a set of data about earthquakes, 
+			  will output a correctly formatted summary of that data
+
+Assignment 2: Write (in C) a program which will give a summary of the lighting conditions in a parking lot.
+			  Input: A set of lamp post positions and intensities, a set of points to test light intensity at
+			  and a set of points describing the boundary of the parking lot.
+			  Output: 1. Number of lamp posts and light intensity at the origin
+			  		  2. Light intensity at each point specified in input
+			  		  3. Summary of number of points sampled and number with light level below a threshold
+			  		  4. A plot of the points sampled and the light intensity at each
+			  		  5. The same plot, with the outline of the parking lot shown.
+
+COMP20003 - Algorithms and Data Structures
+-----------------------------------------
+Assignment 1: Implement a linked list and skiplist data structure in C, and write a report examining the difference in
+			  computation time between the two data structures.
+
+Assignment 2: Graph search. Given a set of cities, each with some set of emergency supplies, and a set of distances between
+			  cities, find the shortest paths by which emergency supplies can be brought to an given city.
+			  Implementation is a modified form of the Dijkstra shortest path algorithm.
